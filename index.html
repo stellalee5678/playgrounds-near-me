@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src 'self' https://unpkg.com;
+    style-src 'self' https://fonts.googleapis.com https://unpkg.com 'unsafe-inline';
+    font-src https://fonts.gstatic.com;
+    connect-src https://nominatim.openstreetmap.org https://overpass-api.de;
+    img-src https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org data:;
+    frame-ancestors 'none';
+    base-uri 'self';
+    form-action 'none';
+  ">
+  <title>Playgrounds Near Me</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H"
+        crossorigin="anonymous" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="header-icon">🛝</div>
+      <h1>Playgrounds Near Me</h1>
+      <p class="subtitle">Find nearby playgrounds with equipment details and age recommendations</p>
+    </div>
+  </header>
+
+  <main>
+    <section id="search-section">
+      <div class="search-controls">
+        <button id="geolocate-btn" type="button">
+          <span class="btn-icon">📍</span> Use My Location
+        </button>
+        <div class="divider-text"><span>or</span></div>
+        <form id="address-form">
+          <div class="input-wrapper">
+            <span class="input-icon">🔍</span>
+            <input type="text" id="address-input" placeholder="Enter an address or place name…" autocomplete="off" maxlength="300" spellcheck="false" />
+          </div>
+          <button type="submit" id="search-btn">Search</button>
+        </form>
+      </div>
+      <div class="radius-controls">
+        <span class="radius-label">Search radius:</span>
+        <div class="radius-buttons">
+          <button class="radius-btn active" data-radius="1000" type="button">1 km</button>
+          <button class="radius-btn" data-radius="5000" type="button">5 km</button>
+          <button class="radius-btn" data-radius="10000" type="button">10 km</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="status-section" class="hidden">
+      <div id="loading-indicator" class="hidden">
+        <div class="spinner"></div>
+        <p>Searching for playgrounds...</p>
+      </div>
+      <div id="error-message" class="hidden"></div>
+      <div id="result-count" class="hidden"></div>
+    </section>
+
+    <section id="map-section" class="hidden">
+      <div id="map"></div>
+    </section>
+
+    <section id="results-section" class="hidden">
+      <div class="results-header">
+        <h2>Nearby Playgrounds</h2>
+        <div class="sort-controls">
+          <label for="sort-select">Sort by:</label>
+          <select id="sort-select">
+            <option value="distance">Distance</option>
+            <option value="name">Name</option>
+          </select>
+        </div>
+      </div>
+      <div id="playground-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors</p>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH"
+          crossorigin="anonymous"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
