@@ -173,6 +173,9 @@ export function renderPlaygroundList(playgrounds, onShowOnMap) {
       ${addrHtml}
       <div class="card-footer">
         <button class="show-on-map-btn" data-id="${pg.id}" type="button">
+          <svg class="map-btn-icon" width="10" height="13" viewBox="0 0 10 13" fill="currentColor" aria-hidden="true">
+            <path d="M5 0C2.24 0 0 2.24 0 5c0 3.75 5 8 5 8s5-4.25 5-8c0-2.76-2.24-5-5-5zm0 6.75A1.75 1.75 0 1 1 5 3.25a1.75 1.75 0 0 1 0 3.5z"/>
+          </svg>
           Show on map
         </button>
         <a href="https://www.openstreetmap.org/${validateOsmType(pg.type)}/${encodeURIComponent(pg.osmId)}"
