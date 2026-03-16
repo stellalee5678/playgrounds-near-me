@@ -12,6 +12,15 @@ import {
   scrollToCard,
 } from "./ui.js";
 import { haversineDistance, formatDistance } from "./utils.js";
+import {
+  filterState,
+  hasActiveFilters,
+  countActiveFilters,
+  clearFilters,
+  applyFilters,
+  getEquipmentOptions,
+  getFacilityOptions,
+} from "./filters.js";
 
 const state = {
   userLat: null,
@@ -41,6 +50,23 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("sort-select")
     .addEventListener("change", handleSortChange);
+
+  // Filter toggle
+  document.getElementById("filter-toggle").addEventListener("click", () => {
+    const panel = document.getElementById("filter-panel");
+    const btn = document.getElementById("filter-toggle");
+    const isOpen = !panel.hidden;
+    panel.hidden = isOpen;
+    btn.setAttribute("aria-expanded", String(!isOpen));
+  });
+
+  // Clear filters
+  document.getElementById("filter-clear-btn").addEventListener("click", () => {
+    clearFilters();
+    document.querySelectorAll(".filter-chip.active").forEach((c) => c.classList.remove("active"));
+    updateFilterBadge();
+    applyFiltersAndRender();
+  });
 });
 
 async function handleGeolocate() {
@@ -107,9 +133,7 @@ function handleSortChange(e) {
     state.playgrounds.sort((a, b) => a.distance - b.distance);
   }
 
-  renderPlaygroundList(state.playgrounds, (id) =>
-    highlightPlayground(state.mapInstance, id)
-  );
+  applyFiltersAndRender();
 }
 
 async function performSearch(lat, lon, radius) {
@@ -124,6 +148,13 @@ async function performSearch(lat, lon, radius) {
 
   showLoading();
   clearResults();
+  document.getElementById("welcome-section").classList.add("hidden");
+
+  // Reset filters and hide filter section while loading
+  clearFilters();
+  document.getElementById("filter-section").classList.add("hidden");
+  document.getElementById("filter-panel").hidden = true;
+  document.getElementById("filter-toggle").setAttribute("aria-expanded", "false");
 
   // Show map section, initialize if needed
   document.getElementById("map-section").classList.remove("hidden");
@@ -151,18 +182,11 @@ async function performSearch(lat, lon, radius) {
     if (state.playgrounds.length === 0) {
       showNoResults(radius);
     } else {
-      document.getElementById("results-section").classList.remove("hidden");
-      renderPlaygroundList(state.playgrounds, (id) =>
-        highlightPlayground(state.mapInstance, id)
-      );
-      updateMap(
-        state.mapInstance,
-        { lat, lon },
-        state.playgrounds,
-        radius,
-        formatDistance,
-        (id) => scrollToCard(id)
-      );
+      document.getElementById("filter-section").classList.remove("hidden");
+      buildFilterUI(state.playgrounds);
+
+      // Render cards and map (filters are cleared above so all results shown)
+      applyFiltersAndRender();
 
       // Kick off background name enrichment for unnamed playgrounds.
       // No await — runs concurrently so the page stays usable.
@@ -208,6 +232,166 @@ async function enrichUnnamedPlaygrounds(playgrounds, myEnrichmentId) {
     } catch (_) {
       // Silently ignore individual failures
     }
+  }
+}
+
+const EQUIPMENT_EMOJI = {
+  Slides: "🛝", Swings: "🎠", Climbing: "🧗", Sandbox: "⏳",
+  Roundabout: "🔵", Seesaw: "⚖️", "Spring Riders": "🐴", Balance: "🤸",
+  Zipline: "🪂", Trampoline: "🤾", "Water Play": "💧", Playhouse: "🏠",
+  "Multi-Play Structure": "🏗️",
+};
+
+const FACILITY_EMOJI = {
+  "Toilets": "🚻", "BBQ": "🍖", "Drinking Water": "💧",
+  "Shelter": "⛺", "Fountain": "⛲", "Sports Pitch": "⚽",
+  "Sports Field": "🏃", "Water Feature": "🌊",
+};
+
+function buildFilterUI(playgrounds) {
+  // Equipment chips (dynamic — only types present in results)
+  const equipContainer = document.getElementById("filter-chips-equipment");
+  equipContainer.innerHTML = "";
+  for (const eq of getEquipmentOptions(playgrounds)) {
+    equipContainer.appendChild(makeChip(EQUIPMENT_EMOJI[eq] || "🎪", eq, "equipment", eq));
+  }
+
+  // Age group chips (static)
+  const ageContainer = document.getElementById("filter-chips-age");
+  ageContainer.innerHTML = "";
+  for (const { value, label, emoji } of [
+    { value: "toddlers", label: "Toddlers (1–4 yrs)",     emoji: "👶" },
+    { value: "young",    label: "Young children (1–7 yrs)", emoji: "🧒" },
+    { value: "school",   label: "School age (4–12 yrs)",  emoji: "🏫" },
+    { value: "all",      label: "All ages",               emoji: "👨‍👩‍👧" },
+  ]) {
+    ageContainer.appendChild(makeChip(emoji, label, "age", value));
+  }
+
+  // Facility chips (dynamic)
+  const facOptions = getFacilityOptions(playgrounds);
+  const facContainer = document.getElementById("filter-chips-facilities");
+  facContainer.innerHTML = "";
+  for (const fac of facOptions) {
+    facContainer.appendChild(makeChip(FACILITY_EMOJI[fac] || "📍", fac, "facilities", fac));
+  }
+  document.getElementById("filter-group-facilities").classList.toggle("hidden", facOptions.length === 0);
+
+  // Accessibility chips (static)
+  const accessContainer = document.getElementById("filter-chips-accessibility");
+  accessContainer.innerHTML = "";
+  accessContainer.appendChild(makeChip("♿", "Wheelchair accessible", "accessibility", "wheelchair"));
+  accessContainer.appendChild(makeChip("🔒", "Fenced",              "accessibility", "fenced"));
+
+  updateFilterBadge();
+}
+
+function makeChip(emoji, label, group, value) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "filter-chip";
+  btn.dataset.group = group;
+  btn.dataset.value = value;
+
+  const emojiSpan = document.createElement("span");
+  emojiSpan.className = "fc-emoji";
+  emojiSpan.textContent = emoji;
+
+  const labelSpan = document.createElement("span");
+  labelSpan.textContent = label;
+
+  btn.appendChild(emojiSpan);
+  btn.append(" ");
+  btn.appendChild(labelSpan);
+
+  if (filterState[group]?.has(value)) btn.classList.add("active");
+
+  btn.addEventListener("click", () => {
+    const set = filterState[group];
+    if (!set) return;
+    if (set.has(value)) {
+      set.delete(value);
+      btn.classList.remove("active");
+    } else {
+      set.add(value);
+      btn.classList.add("active");
+    }
+    updateFilterBadge();
+    applyFiltersAndRender();
+  });
+
+  return btn;
+}
+
+function updateFilterBadge() {
+  const count = countActiveFilters();
+  const badge = document.getElementById("filter-active-badge");
+  const clearBtn = document.getElementById("filter-clear-btn");
+  if (count > 0) {
+    badge.textContent = count;
+    badge.classList.remove("hidden");
+    clearBtn.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+    clearBtn.classList.add("hidden");
+  }
+}
+
+function applyFiltersAndRender() {
+  const filtered = applyFilters(state.playgrounds);
+  const total = state.playgrounds.length;
+
+  // Update result count
+  const countEl = document.getElementById("result-count");
+  countEl.classList.remove("hidden");
+  if (hasActiveFilters()) {
+    countEl.textContent = `Showing ${filtered.length} of ${total} playground${total !== 1 ? "s" : ""}`;
+  } else {
+    countEl.textContent = `Found ${total} playground${total !== 1 ? "s" : ""}`;
+  }
+
+  // Update showing label in filter bar
+  const showingEl = document.getElementById("filter-showing");
+  if (hasActiveFilters()) {
+    showingEl.textContent = `${filtered.length} of ${total} shown`;
+    showingEl.classList.remove("hidden");
+  } else {
+    showingEl.classList.add("hidden");
+  }
+
+  // Render cards
+  const listSection = document.getElementById("results-section");
+  const list = document.getElementById("playground-list");
+
+  if (filtered.length === 0) {
+    listSection.classList.remove("hidden");
+    list.innerHTML = `
+      <div class="no-filter-results">
+        <span class="nfr-icon">🔍</span>
+        <p>No playgrounds match your current filters.</p>
+        <button type="button" id="clear-filters-inline">Clear filters</button>
+      </div>`;
+    document.getElementById("clear-filters-inline").addEventListener("click", () => {
+      clearFilters();
+      document.querySelectorAll(".filter-chip.active").forEach((c) => c.classList.remove("active"));
+      updateFilterBadge();
+      applyFiltersAndRender();
+    });
+  } else {
+    listSection.classList.remove("hidden");
+    renderPlaygroundList(filtered, (id) => highlightPlayground(state.mapInstance, id));
+  }
+
+  // Update map to reflect filtered results
+  if (state.mapInstance && state.userLat !== null) {
+    updateMap(
+      state.mapInstance,
+      { lat: state.userLat, lon: state.userLon },
+      filtered,
+      state.radius,
+      formatDistance,
+      (id) => scrollToCard(id)
+    );
   }
 }
 
